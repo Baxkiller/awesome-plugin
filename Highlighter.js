@@ -37,7 +37,6 @@ function highlightSelection() {
 function unhighlightSelection(event) {
     // 获取鼠标点击的元素
     var element = event.target;
-    console.log(element);
     var isHighlighted = element.tagName === "HIGHLIGHT" && element.style.backgroundColor === highlightColor;
     if (!isHighlighted){
         console.log(element.tagName);
@@ -45,13 +44,11 @@ function unhighlightSelection(event) {
         return;
     }
 
-    console.log("Find Highlighted")
     // 将higlilight元素替换为它textContent的内容
     var highlight_block = element;
     var text = highlight_block.textContent;
     var textNode = document.createTextNode(text);
     highlight_block.parentNode.replaceChild(textNode, highlight_block);
-    console.log("replaced")
 }
 
 // 监听键盘按下事件
