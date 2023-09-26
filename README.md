@@ -17,3 +17,4 @@ Highlighter is a plugin that can highlight the text you want to highlight in the
   - [ ] Add a button to the web page to control the highlighter.
   - [ ] Choose the color of the highlighter.
   - [ ] Append comments to the highlighted text.
+  - [ ] Merge neighboring highlighters.
