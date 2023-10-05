@@ -18,3 +18,7 @@ Highlighter is a plugin that can highlight the text you want to highlight in the
   - [ ] Choose the color of the highlighter.
   - [ ] Append comments to the highlighted text.
   - [ ] Merge neighboring highlighters.
+
+
+## Ideas
+- [ ] UpAfterIssue: Check if there is update of code after an issue is proposed, and show the update comment.
