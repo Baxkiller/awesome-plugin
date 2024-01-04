@@ -1,34 +1,204 @@
 // ==UserScript==
 // @name         HighLighter
 // @namespace    http://tampermonkey.net/
-// @version      0.2
-// @description  当按住键盘的Ctrl键并使用鼠标选中部分网页文字时，将对应文字的背景高亮显示（例如明黄色）,当按住键盘的Shift键并使用鼠标左键点击部分网页文字时，删除对应高亮
-// @author       Baxkiller with Bing AI
+// @version      0.3
+// @description  当按住键盘的Ctrl键并使用鼠标选中部分网页文字时，将对应文字的背景高亮显示（例如明黄色）,当按住键盘的Alt键并使用鼠标左键点击部分网页文字时，删除对应高亮
+// @author       Baxkiller with Bing AI & Copilot
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
 
 // 定义一个高亮颜色
 var highlightColor = "yellow";
+var highlight_cnt=0;
+var highlight_limit=100;
+var created_note = false;
+// 创建用于暂存高亮内容的数组
+var highlightContents = [];
+var note;
 
-// 定义一个函数，用于高亮选中的文字
+// 定义和创建网页右侧便笺
+class Note {
+    constructor() {
+        this.wrapper = document.createElement('div');
+        this.wrapper.style.position = 'fixed';
+        this.wrapper.style.right = '0';
+        this.wrapper.style.top = '20%'; // 垂直居中
+        this.wrapper.style.width = '200px';
+        this.wrapper.style.height = '70vh'; // 自动高度
+        this.wrapper.style.backgroundColor = 'rgba(240, 240, 240, 0.8)';  // 设置背景颜色为略微透明的灰色
+        this.wrapper.style.padding = '10px';
+        this.wrapper.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.1)'; // 添加阴影
+        this.wrapper.style.borderRadius = '18px'; // 添加圆角
+        this.wrapper.style.zIndex = '9999'; // 置于顶层
+
+        this.note = document.createElement('div');
+        this.note.style.overflow = 'auto';
+        this.note.style.height = '92%'; // 最大高度60%的视口高度
+        this.wrapper.appendChild(this.note);
+
+        document.body.appendChild(this.wrapper);
+
+        this.addCopyButton();
+        this.addClearButton();
+    }
+
+    addText(text) {
+        // console.log(text);
+        this.note.innerHTML += text + '<br>';
+    }
+
+    addHightLightNode(node) {
+        var text = node.textContent;
+        var parent = node.parentNode;
+        var markdownText = text;
+
+        if (parent.tagName === 'H1') {
+            markdownText = '# ' + text;
+        } else if (parent.tagName === 'H2') {
+            markdownText = '## ' + text;
+        } else if (parent.tagName === 'H3') {
+            markdownText = '### ' + text;
+        } else if (parent.tagName === 'P') {
+            markdownText = text;
+        } else if (parent.tagName === 'SPAN') {
+            markdownText = text;
+        } else if (parent.tagName === 'A') {
+            markdownText = '[' + text + '](' + parent.href + ')';
+        } else if (parent.tagName === 'IMG') {
+            markdownText = '![' + parent.alt + '](' + parent.src + ')';
+        } else if (parent.tagName === 'LI') {
+            markdownText = '- ' + text;
+        } else if (parent.tagName === 'UL') {
+            markdownText = '- ' + text;
+        } else if (parent.tagName === 'OL') {
+            markdownText = '1. ' + text;
+        }
+
+        this.addText(markdownText);
+    }
+
+    addCopyButton() {
+        var copyButton = document.createElement('button');
+        copyButton.innerText = 'Copy';
+        copyButton.style.width = '100%'; // 与便笺同宽
+        copyButton.style.height = '6%';
+        copyButton.style.backgroundColor = '#007BFF'; // 蓝色背景
+        copyButton.style.color = '#FFFFFF'; // 白色文字
+        copyButton.style.border = 'none'; // 无边框
+        copyButton.style.padding = '10px';
+        copyButton.style.cursor = 'pointer'; // 鼠标悬停时变为手形
+        copyButton.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.1)'; // 添加阴影
+        copyButton.style.borderRadius = '18px'; // 添加圆角
+        copyButton.style.zIndex = '9999';
+
+        copyButton.onclick = () => {
+            console.log("copy button clicking");
+            navigator.clipboard.writeText(this.note.innerText).then(function() {
+                console.log('复制成功');
+            }, function(err) {
+                console.error('复制失败', err);
+            });
+            console.log("copy button clicked");
+
+        };
+        this.wrapper.appendChild(copyButton);
+    }
+
+    addClearButton() {
+        var clearButton = document.createElement('button');
+        clearButton.innerText = 'Clear';
+        clearButton.style.width = '100%'; // 占据一半宽度
+        clearButton.style.height = '6%';
+        clearButton.style.backgroundColor = '#dc3545'; // 红色背景
+        clearButton.style.color = '#FFFFFF'; // 白色文字
+        clearButton.style.border = 'none'; // 无边框
+        clearButton.style.padding = '10px';
+        clearButton.style.cursor = 'pointer'; // 鼠标悬停时变为手形
+        clearButton.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.1)'; // 添加阴影
+        clearButton.style.borderRadius = '18px'; // 添加圆角
+        clearButton.style.zIndex = '9999'; 
+
+        clearButton.onclick = () => {
+            console.log("clear button clicking");
+            this.note.innerHTML = ''; // 清除所有文本
+            console.log("clear button clicked");
+        };
+        this.wrapper.appendChild(clearButton);
+    }
+}
+
+function highlightNode(node, startOffset, endOffset) {
+    if (highlight_cnt > highlight_limit) {
+        return false;
+    }
+    var highlight_block = document.createElement("highlight");
+    highlight_block.style.backgroundColor = highlightColor;
+    var nodeRange = document.createRange();
+    nodeRange.setStart(node, startOffset !== undefined ? startOffset : 0);
+    nodeRange.setEnd(node, endOffset !== undefined ? endOffset : node.nodeValue.length);
+    nodeRange.surroundContents(highlight_block);
+
+    if (!created_note) {
+        note = new Note();
+        created_note = true;
+    }
+    note.addHightLightNode(highlight_block);
+
+    highlight_cnt++;
+    return true;
+}
+
+function highlightRange(range) {
+    var commonAncestor = range.commonAncestorContainer;
+    var startNode = range.startContainer;
+    var endNode = range.endContainer;
+
+    var treeWalker = document.createTreeWalker(commonAncestor, NodeFilter.SHOW_TEXT);
+    var currentNode = treeWalker.currentNode;
+
+    var inRange = false;
+    while (currentNode) {
+        if (currentNode === startNode) {
+            inRange = true;
+        }
+        if (inRange && currentNode.nodeValue.trim() !== '') {
+            var startOffset = (currentNode === startNode) ? range.startOffset : 0;
+            var endOffset = (currentNode === endNode) ? range.endOffset : currentNode.nodeValue.length;
+            highlightContents.push({
+                node: currentNode,
+                startOffset: startOffset,
+                endOffset: endOffset
+            });
+        }
+        if (currentNode === endNode) {
+            break;
+        }
+        currentNode = treeWalker.nextNode();
+    }
+}
+
 function highlightSelection() {
-    // 获取选中的文字范围
     var selection = window.getSelection();
     if (selection.rangeCount > 0) {
-        // 获取选中的文字的第一个范围
         var range = selection.getRangeAt(0);
-        // 判断选中的文字是否已经高亮
         var isHighlighted = range.startContainer.parentNode.style.backgroundColor === highlightColor;
-        // 如果已经高亮，则不做任何操作，直接返回
         if (isHighlighted) return;
-        // 创建一个span元素，用于包裹选中的文字
-        var highlight_block = document.createElement("highlight");
-        // 设置span元素的背景颜色为高亮颜色
-        highlight_block.style.backgroundColor = highlightColor;
-        // 将选中的文字替换为span元素
-        range.surroundContents(highlight_block);
-        // 清除选中状态
+
+        highlightRange(range);
+        highlightContents.forEach(function (highlightContent) {
+            highlightNode(highlightContent.node, highlightContent.startOffset, highlightContent.endOffset);
+        });
+
+        // 一次性选中内容的后面添加换行符
+        if (highlightContents.length > 0) {
+            note.addText('<br>');
+        }
+
+        // 直接清空,防止溢出
+        highlightContents.length = 0;
+        highlightContents = [];
+
         selection.removeAllRanges();
     }
 }
@@ -39,8 +209,8 @@ function unhighlightSelection(event) {
     var element = event.target;
     var isHighlighted = element.tagName === "HIGHLIGHT" && element.style.backgroundColor === highlightColor;
     if (!isHighlighted){
-        console.log(element.tagName);
-        console.log(element.style.backgroundColor);
+        // console.log(element.tagName);
+        // console.log(element.style.backgroundColor);
         return;
     }
 
@@ -59,7 +229,6 @@ document.addEventListener("keydown", function (event) {
         var handler = event.ctrlKey ? highlightSelection : unhighlightSelection;
         // 监听鼠标事件，调用对应函数
         if (event.ctrlKey) {
-
             // 如果按下了Ctrl键，则监听鼠标松开事件，用于高亮选中的文字
             document.addEventListener("mouseup", handler);
         } else {
