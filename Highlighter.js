@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HighLighter
 // @namespace    http://tampermonkey.net/
-// @version      0.3
+// @version      0.4.1
 // @description  当按住键盘的Ctrl键并使用鼠标选中部分网页文字时，将对应文字的背景高亮显示（例如明黄色）,当按住键盘的Alt键并使用鼠标左键点击部分网页文字时，删除对应高亮
 // @author       Baxkiller with Bing AI & Copilot
 // @match        *://*/*
@@ -26,26 +26,32 @@ class Note {
         this.wrapper.style.top = '20%'; // 垂直居中
         this.wrapper.style.width = '200px';
         this.wrapper.style.height = '70vh'; // 自动高度
-        this.wrapper.style.backgroundColor = 'rgba(240, 240, 240, 0.8)';  // 设置背景颜色为略微透明的灰色
+        this.wrapper.style.backgroundColor = 'rgba(240, 240, 240, 0.7)';  // 设置背景颜色为略微透明的灰色
         this.wrapper.style.padding = '10px';
         this.wrapper.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.1)'; // 添加阴影
         this.wrapper.style.borderRadius = '18px'; // 添加圆角
         this.wrapper.style.zIndex = '9999'; // 置于顶层
 
-        this.note = document.createElement('div');
+        this.note = document.createElement('textarea');
         this.note.style.overflow = 'auto';
-        this.note.style.height = '92%'; // 最大高度60%的视口高度
+        this.note.style.height = '88%'; // 最大高度60%的视口高度
+        this.note.style.width = '100%'; // 占据全部宽度
+        this.note.style.border = 'none';  // 无边框
+        this.note.style.backgroundColor = 'transparent';  // 背景色透明
+        this.note.style.outline = 'none';  // 去掉焦点时的边框
+        this.note.style.resize = 'none';  // 用户不能调整大小
+
         this.wrapper.appendChild(this.note);
 
         document.body.appendChild(this.wrapper);
 
-        this.addCopyButton();
-        this.addClearButton();
+        this.addCopyButton('6%');
+        this.addClearButton('6%');
     }
 
     addText(text) {
         // console.log(text);
-        this.note.innerHTML += text + '<br>';
+        this.note.innerHTML += text + '\n';
     }
 
     addHightLightNode(node) {
@@ -73,16 +79,20 @@ class Note {
             markdownText = '- ' + text;
         } else if (parent.tagName === 'OL') {
             markdownText = '1. ' + text;
+        } else if (parent.tagName === 'B') {
+            markdownText = '**' + text + '**';
+        } else if (parent.tagName === 'I') {
+            markdownText = '*' + text + '*';
         }
 
         this.addText(markdownText);
     }
 
-    addCopyButton() {
+    addCopyButton(h) {
         var copyButton = document.createElement('button');
         copyButton.innerText = 'Copy';
         copyButton.style.width = '100%'; // 与便笺同宽
-        copyButton.style.height = '6%';
+        copyButton.style.height = h;
         copyButton.style.backgroundColor = '#007BFF'; // 蓝色背景
         copyButton.style.color = '#FFFFFF'; // 白色文字
         copyButton.style.border = 'none'; // 无边框
@@ -91,25 +101,28 @@ class Note {
         copyButton.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.1)'; // 添加阴影
         copyButton.style.borderRadius = '18px'; // 添加圆角
         copyButton.style.zIndex = '9999';
+        copyButton.id="copyButton_highLighter";
 
+        this.copyButton = copyButton;
+        var that = this;  // 保存this的值
         copyButton.onclick = () => {
-            console.log("copy button clicking");
-            navigator.clipboard.writeText(this.note.innerText).then(function() {
+            navigator.clipboard.writeText(that.note.value).then(() => {  // 使用that代替this
                 console.log('复制成功');
+                this.copyButton.innerText = 'Success';  // 修改按钮文本
+                setTimeout(() => { this.copyButton.innerText = 'Copy'; }, 2000);  // 2秒后恢复原状
             }, function(err) {
                 console.error('复制失败', err);
             });
-            console.log("copy button clicked");
-
         };
-        this.wrapper.appendChild(copyButton);
+
+        this.wrapper.appendChild(this.copyButton);
     }
 
-    addClearButton() {
+    addClearButton(h) {
         var clearButton = document.createElement('button');
         clearButton.innerText = 'Clear';
         clearButton.style.width = '100%'; // 占据一半宽度
-        clearButton.style.height = '6%';
+        clearButton.style.height = h;
         clearButton.style.backgroundColor = '#dc3545'; // 红色背景
         clearButton.style.color = '#FFFFFF'; // 白色文字
         clearButton.style.border = 'none'; // 无边框
@@ -118,11 +131,11 @@ class Note {
         clearButton.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.1)'; // 添加阴影
         clearButton.style.borderRadius = '18px'; // 添加圆角
         clearButton.style.zIndex = '9999'; 
-
+        
         clearButton.onclick = () => {
-            console.log("clear button clicking");
             this.note.innerHTML = ''; // 清除所有文本
-            console.log("clear button clicked");
+            this.wrapper.style.display = 'none'; // 隐藏便笺
+            created_note = false;
         };
         this.wrapper.appendChild(clearButton);
     }
@@ -192,7 +205,7 @@ function highlightSelection() {
 
         // 一次性选中内容的后面添加换行符
         if (highlightContents.length > 0) {
-            note.addText('<br>');
+            note.addText('\n');
         }
 
         // 直接清空,防止溢出
@@ -218,7 +231,9 @@ function unhighlightSelection(event) {
     var highlight_block = element;
     var text = highlight_block.textContent;
     var textNode = document.createTextNode(text);
-    highlight_block.parentNode.replaceChild(textNode, highlight_block);
+    if (highlight_block.parentNode) {
+        highlight_block.parentNode.replaceChild(textNode, highlight_block);
+    }
 }
 
 // 监听键盘按下事件
@@ -232,7 +247,6 @@ document.addEventListener("keydown", function (event) {
             // 如果按下了Ctrl键，则监听鼠标松开事件，用于高亮选中的文字
             document.addEventListener("mouseup", handler);
         } else {
-
             document.addEventListener("mousedown", handler);
         }
     }
